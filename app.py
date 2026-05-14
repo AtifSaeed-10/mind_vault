@@ -2,6 +2,7 @@ import os
 import streamlit as st
 import joblib
 import numpy as np
+import traceback  # <-- Add this line for full traceback
 
 # ── PAGE CONFIG ─────────────────────────────────────────────
 st.set_page_config(
@@ -16,12 +17,10 @@ st.set_page_config(
 def load_model():
     return joblib.load("mental_health_model.pkl")
 
-
 # ── CSS (UNCHANGED UI STYLE) ────────────────────────────────
 st.markdown("""<style>
 /* (KEEP YOUR FULL CSS EXACTLY HERE — unchanged for brevity) */
 </style>""", unsafe_allow_html=True)
-
 
 # ── BACKGROUND CANVAS ANIMATION ─────────────────────────────
 st.markdown("""
@@ -33,7 +32,6 @@ st.markdown("""
 <div class="shell">
 """, unsafe_allow_html=True)
 
-
 # ── NAV ─────────────────────────────────────────────────────
 st.markdown("""
 <div class="nav">
@@ -44,7 +42,6 @@ st.markdown("""
     </div>
 </div>
 """, unsafe_allow_html=True)
-
 
 # ── HERO ────────────────────────────────────────────────────
 st.markdown("""
@@ -64,7 +61,6 @@ st.markdown("""
 <div class="divider"></div>
 """, unsafe_allow_html=True)
 
-
 # ── MAPPINGS ────────────────────────────────────────────────
 YESNO       = {"Yes": 1, "No": 0}
 YESNO_MAYBE = {"Yes": 1, "Maybe": 0.5, "No": 0}
@@ -79,7 +75,6 @@ DAYS_MAP    = {
 }
 MOOD_MAP    = {"Low": 0, "Medium": 1, "High": 2}
 CARE_MAP    = {"No": 0, "Not sure": 0.5, "Yes": 1}
-
 
 # ── SECTION 1 ───────────────────────────────────────────────
 st.markdown("""
@@ -101,7 +96,6 @@ with c2:
 
 st.markdown("</div>", unsafe_allow_html=True)
 
-
 # ── SECTION 2 ───────────────────────────────────────────────
 st.markdown("""<div class="sec-head"><div class="sec-num">02</div>
 <div class="sec-title">Stress & Emotional State</div><div class="sec-line"></div></div>
@@ -117,7 +111,6 @@ with c4:
 
 st.markdown("</div>", unsafe_allow_html=True)
 
-
 # ── SECTION 3 ───────────────────────────────────────────────
 st.markdown("""<div class="sec-head"><div class="sec-num">03</div>
 <div class="sec-title">Behaviour & Social Life</div><div class="sec-line"></div></div>
@@ -131,7 +124,6 @@ with c6:
     days_indoors = st.selectbox("Days spent indoors (past month)?", list(DAYS_MAP.keys()))
 
 st.markdown("</div>", unsafe_allow_html=True)
-
 
 # ── SECTION 4 ───────────────────────────────────────────────
 st.markdown("""<div class="sec-head"><div class="sec-num">04</div>
@@ -147,10 +139,8 @@ with c8:
 
 st.markdown("</div>", unsafe_allow_html=True)
 
-
 # ── BUTTON ──────────────────────────────────────────────────
 predict_clicked = st.button("✦ Reveal My Assessment")
-
 
 # ── PREDICTION ENGINE ───────────────────────────────────────
 if predict_clicked:
@@ -219,9 +209,9 @@ if predict_clicked:
 
             st.info("⚠️ This is NOT a medical diagnosis. Seek professional help if needed.")
 
-        except Exception as e:
-            st.error(f"Prediction error: {e}")
-
+        except Exception:
+            st.error("Prediction error:")
+            st.code(traceback.format_exc())
 
 # ── FOOTER ────────────────────────────────────────────────
 st.markdown("""
