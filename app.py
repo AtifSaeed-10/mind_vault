@@ -1,559 +1,908 @@
+import os
 import streamlit as st
 import joblib
 import numpy as np
-import pandas as pd
-import os
 
 st.set_page_config(
-    page_title="Mental Health Crisis Predictor",
+    page_title="MindVault · Mental Health Assessment",
     page_icon="🧠",
-    layout="centered"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
+# ── LOAD MODEL ───────────────────────────────────────────────────────────────
+@st.cache_resource
+def load_model():
+    model = joblib.load("mental_health_model.pkl")
+    return model
+
+# ── CSS ─────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@200;300;400;600;700;800&family=Space+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@200;300;400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap');
 
-:root {
-    --ink:      #0b0d17;
-    --surface:  #111527;
-    --card:     #161b2e;
-    --border:   #1f2a45;
-    --accent1:  #7f5af0;
-    --accent2:  #2cb67d;
-    --accent3:  #ff8906;
-    --text:     #fffffe;
-    --muted:    #72757e;
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+html, body, .stApp {
+    background: #03050f !important;
+    font-family: 'Sora', sans-serif;
+    overflow-x: hidden;
 }
 
-* { font-family: 'Outfit', sans-serif; box-sizing: border-box; }
+#MainMenu, footer, [data-testid="stToolbar"], [data-testid="stDecoration"] {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+}
+header { visibility: hidden !important; }
 
-.stApp {
-    background-color: var(--ink);
-    background-image:
-        radial-gradient(ellipse 80% 60% at 20% 10%,  rgba(127,90,240,0.18) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 50% at 80% 80%,  rgba(44,182,125,0.14) 0%, transparent 55%),
-        radial-gradient(ellipse 50% 40% at 60% 30%,  rgba(255,137,6,0.08)  0%, transparent 50%),
-        url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.015'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-    color: var(--text);
-    min-height: 100vh;
+.block-container { padding: 0 !important; max-width: 100% !important; }
+
+/* ── MAIN SHELL ─────────────────────────────────────────────────────────── */
+.shell {
+    position: relative;
+    z-index: 1;
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 72px 40px 120px;
 }
 
-.stApp::before {
-    content: '';
-    position: fixed;
-    top: -200px; left: -200px;
-    width: 600px; height: 600px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(127,90,240,0.12), transparent 70%);
-    animation: drift1 18s ease-in-out infinite alternate;
-    pointer-events: none; z-index: 0;
-}
-.stApp::after {
-    content: '';
-    position: fixed;
-    bottom: -150px; right: -150px;
-    width: 500px; height: 500px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(44,182,125,0.10), transparent 70%);
-    animation: drift2 22s ease-in-out infinite alternate;
-    pointer-events: none; z-index: 0;
-}
-
-@keyframes drift1 {
-    from { transform: translate(0,0) scale(1); }
-    to   { transform: translate(120px, 80px) scale(1.2); }
-}
-@keyframes drift2 {
-    from { transform: translate(0,0) scale(1); }
-    to   { transform: translate(-80px,-60px) scale(1.15); }
-}
-
-#MainMenu, footer, header { visibility: hidden; }
-.block-container { padding-top: 1.5rem; padding-bottom: 4rem; position: relative; z-index: 1; }
-
-.hero { text-align: center; padding: 2.5rem 1rem 1.5rem; }
-
-.hero-badge {
-    display: inline-flex;
+/* ── NAV ────────────────────────────────────────────────────────────────── */
+.nav {
+    display: flex;
     align-items: center;
-    gap: 0.4rem;
-    background: rgba(127,90,240,0.12);
-    border: 1px solid rgba(127,90,240,0.3);
-    border-radius: 999px;
-    padding: 0.3rem 1rem;
-    font-family: 'Space Mono', monospace;
-    font-size: 0.7rem;
-    color: #a78bfa;
-    letter-spacing: 0.1em;
-    margin-bottom: 1.2rem;
-    animation: fadeDown 0.8s ease both;
+    justify-content: space-between;
+    margin-bottom: 80px;
+    padding-bottom: 24px;
+    border-bottom: 1px solid rgba(99,179,237,0.08);
+    animation: fadeDown 0.9s cubic-bezier(.16,1,.3,1) both;
 }
-
-.hero-brain {
-    font-size: 5rem;
-    display: block;
-    margin-bottom: 0.8rem;
-    animation: brainPulse 4s ease-in-out infinite;
-    filter: drop-shadow(0 0 30px rgba(127,90,240,0.6));
+@keyframes fadeDown {
+    from { opacity:0; transform:translateY(-16px); }
+    to   { opacity:1; transform:translateY(0); }
 }
-
-@keyframes brainPulse {
-    0%,100% { transform: scale(1) rotate(-3deg);  filter: drop-shadow(0 0 20px rgba(127,90,240,0.5)); }
-    50%     { transform: scale(1.1) rotate(3deg); filter: drop-shadow(0 0 45px rgba(127,90,240,0.9)); }
-}
-
-.hero h1 {
-    font-size: 3rem;
+.nav-logo {
+    font-family: 'Sora', sans-serif;
     font-weight: 800;
-    line-height: 1.1;
-    margin: 0 0 0.5rem;
-    background: linear-gradient(135deg, #c4b5fd 0%, #fffffe 45%, #6ee7b7 100%);
+    font-size: 20px;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #63b3ed 0%, #4fd1c5 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
-    animation: fadeDown 0.9s ease 0.1s both;
+    background-clip: text;
+}
+.nav-pill {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #4fd1c5;
+    background: rgba(79,209,197,0.08);
+    border: 1px solid rgba(79,209,197,0.18);
+    padding: 8px 16px;
+    border-radius: 40px;
+}
+.nav-pill-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #4fd1c5;
+    box-shadow: 0 0 10px #4fd1c5;
+    animation: blink 2s ease-in-out infinite;
+}
+@keyframes blink {
+    0%,100% { opacity:1; transform:scale(1); }
+    50%      { opacity:.3; transform:scale(.7); }
 }
 
+/* ── HERO ───────────────────────────────────────────────────────────────── */
+.hero {
+    text-align: center;
+    margin-bottom: 80px;
+    animation: fadeUp 1s cubic-bezier(.16,1,.3,1) .1s both;
+}
+@keyframes fadeUp {
+    from { opacity:0; transform:translateY(28px); }
+    to   { opacity:1; transform:translateY(0); }
+}
+.hero-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 20px;
+    background: rgba(99,179,237,0.08);
+    border: 1px solid rgba(99,179,237,0.18);
+    border-radius: 40px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: #63b3ed;
+    margin-bottom: 36px;
+}
+.hero-tag-glow {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #63b3ed;
+    box-shadow: 0 0 12px #63b3ed;
+    animation: blink 2.4s ease-in-out infinite;
+}
+.hero-h1 {
+    font-size: clamp(2.6rem, 7vw, 4.8rem);
+    font-weight: 900;
+    line-height: 1.07;
+    color: #f0f4ff;
+    letter-spacing: -2.5px;
+    margin-bottom: 24px;
+}
+.hero-h1 span {
+    background: linear-gradient(135deg, #63b3ed 0%, #4fd1c5 45%, #68d391 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    background-size: 200% 200%;
+    animation: shimmer 6s ease infinite;
+}
+@keyframes shimmer {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
 .hero-sub {
-    color: var(--muted);
-    font-size: 1rem;
+    font-size: 17px;
+    color: #718096;
+    line-height: 1.8;
+    max-width: 520px;
+    margin: 0 auto;
     font-weight: 300;
-    animation: fadeDown 1s ease 0.2s both;
-    margin-bottom: 0.5rem;
+    animation: fadeUp 1s cubic-bezier(.16,1,.3,1) .2s both;
 }
-
-@keyframes fadeDown {
-    from { opacity: 0; transform: translateY(-14px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-
-.stats-row {
+.hero-stats {
     display: flex;
     justify-content: center;
-    gap: 2rem;
-    margin: 1.5rem 0;
-    animation: fadeDown 1s ease 0.3s both;
+    gap: 56px;
+    margin-top: 52px;
+    flex-wrap: wrap;
+    animation: fadeUp 1s cubic-bezier(.16,1,.3,1) .3s both;
 }
-.stat-item { text-align: center; }
-.stat-num {
+.stat { display:flex; flex-direction:column; align-items:center; gap:6px; }
+.stat-val {
     font-family: 'Space Mono', monospace;
-    font-size: 1.3rem;
+    font-size: 26px;
     font-weight: 700;
-    color: #a78bfa;
+    background: linear-gradient(135deg, #63b3ed, #4fd1c5);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
-.stat-label {
-    font-size: 0.7rem;
-    color: var(--muted);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-.glow-divider {
-    height: 1px;
-    background: linear-gradient(90deg, transparent 0%, #7f5af055 20%, #2cb67d55 80%, transparent 100%);
-    margin: 1.5rem 0;
-    position: relative;
-}
-.glow-divider::after {
-    content: '';
-    position: absolute;
-    top: -1px; left: 30%; right: 30%;
-    height: 3px;
-    background: linear-gradient(90deg, #7f5af0, #2cb67d);
-    border-radius: 999px;
-    filter: blur(4px);
-}
-
-.sec-label {
+.stat-lbl {
     font-family: 'Space Mono', monospace;
-    font-size: 0.68rem;
-    letter-spacing: 0.18em;
+    font-size: 10px;
+    letter-spacing: 1.2px;
     text-transform: uppercase;
-    color: #7f5af0;
-    margin: 2rem 0 0.8rem;
+    color: #4a5568;
+    font-weight: 700;
+}
+
+/* ── DIVIDER ────────────────────────────────────────────────────────────── */
+.divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(99,179,237,0.2), transparent);
+    margin: 72px 0;
+}
+
+/* ── SECTION HEADER ─────────────────────────────────────────────────────── */
+.sec-head {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 14px;
+    margin: 56px 0 32px;
+    animation: fadeUp .8s cubic-bezier(.16,1,.3,1) both;
 }
-.sec-label span {
-    background: rgba(127,90,240,0.12);
-    border: 1px solid rgba(127,90,240,0.25);
-    border-radius: 4px;
-    padding: 0.15rem 0.5rem;
+.sec-num {
+    width: 38px; height: 38px;
+    background: linear-gradient(135deg, #63b3ed, #4fd1c5);
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 14px;
+    font-weight: 700;
+    color: #03050f;
+    flex-shrink: 0;
+    box-shadow: 0 6px 20px rgba(99,179,237,0.25);
 }
-.sec-label::after {
-    content: '';
+.sec-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #e2e8f0;
+}
+.sec-line {
     flex: 1;
     height: 1px;
-    background: linear-gradient(90deg, rgba(127,90,240,0.3), transparent);
+    background: linear-gradient(90deg, rgba(99,179,237,0.15), transparent);
 }
 
-.stSelectbox label, .stSlider label, .stRadio label {
-    color: #94a3b8 !important;
-    font-size: 0.82rem !important;
-    font-weight: 300 !important;
-    letter-spacing: 0.04em;
-}
-
-div[data-baseweb="select"] > div {
-    background: var(--card) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 10px !important;
-    color: var(--text) !important;
-    transition: border-color 0.2s !important;
-}
-div[data-baseweb="select"] > div:hover {
-    border-color: #7f5af0 !important;
-    box-shadow: 0 0 0 3px rgba(127,90,240,0.12) !important;
-}
-
-div[data-testid="stRadio"] > div { gap: 0.5rem; flex-wrap: wrap; }
-div[data-testid="stRadio"] label {
-    background: var(--card) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 8px !important;
-    padding: 0.35rem 0.9rem !important;
-    color: var(--muted) !important;
-    transition: all 0.2s !important;
-    font-size: 0.85rem !important;
-}
-div[data-testid="stRadio"] label:hover {
-    border-color: #7f5af0 !important;
-    color: var(--text) !important;
-    background: rgba(127,90,240,0.08) !important;
-}
-
-div[data-testid="stButton"] > button {
-    width: 100%;
-    background: linear-gradient(135deg, #7f5af0 0%, #2cb67d 100%);
-    color: white;
-    font-family: 'Outfit', sans-serif;
-    font-size: 1.05rem;
-    font-weight: 700;
-    padding: 0.9rem 2rem;
-    border: none;
-    border-radius: 14px;
-    cursor: pointer;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    transition: all 0.3s;
-    margin-top: 1.5rem;
-}
-div[data-testid="stButton"] > button:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 12px 40px rgba(127,90,240,0.45), 0 4px 12px rgba(44,182,125,0.2);
-}
-div[data-testid="stButton"] > button:active { transform: translateY(-1px); }
-
-.result-box {
-    border-radius: 20px;
-    padding: 2.5rem 2rem;
-    text-align: center;
-    margin-top: 1rem;
-    animation: resultReveal 0.6s cubic-bezier(0.34,1.56,0.64,1) both;
-}
-
-.result-treatment {
-    background: linear-gradient(135deg, #1a0f3a 0%, #0f1628 100%);
-    border: 1px solid rgba(127,90,240,0.5);
-    box-shadow: 0 0 60px rgba(127,90,240,0.15), inset 0 1px 0 rgba(255,255,255,0.05);
-}
-.result-ok {
-    background: linear-gradient(135deg, #0a2419 0%, #0f1628 100%);
-    border: 1px solid rgba(44,182,125,0.5);
-    box-shadow: 0 0 60px rgba(44,182,125,0.12), inset 0 1px 0 rgba(255,255,255,0.05);
-}
-
-@keyframes resultReveal {
-    from { opacity: 0; transform: scale(0.88) translateY(20px); }
-    to   { opacity: 1; transform: scale(1) translateY(0); }
-}
-
-.result-icon  { font-size: 4.5rem; display: block; margin-bottom: 0.6rem; }
-.result-title { font-size: 1.8rem; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 0.4rem; }
-.result-treatment .result-title { color: #c4b5fd; }
-.result-ok .result-title        { color: #6ee7b7; }
-
-.result-desc {
-    color: var(--muted);
-    font-size: 0.9rem;
-    font-weight: 300;
-    max-width: 340px;
-    margin: 0 auto 1.2rem;
-    line-height: 1.6;
-}
-
-.conf-wrap {
-    background: rgba(0,0,0,0.3);
-    border-radius: 14px;
-    padding: 1rem 1.2rem;
-    margin-top: 1rem;
-}
-.conf-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.5rem;
-}
-.conf-text {
-    font-family: 'Space Mono', monospace;
-    font-size: 0.72rem;
-    color: var(--muted);
-    letter-spacing: 0.08em;
-}
-.conf-pct {
-    font-family: 'Space Mono', monospace;
-    font-size: 1.1rem;
-    font-weight: 700;
-}
-.result-treatment .conf-pct { color: #a78bfa; }
-.result-ok .conf-pct        { color: #2cb67d; }
-
-.conf-track {
-    background: rgba(255,255,255,0.06);
-    border-radius: 999px;
-    height: 6px;
+/* ── FORM PANEL ─────────────────────────────────────────────────────────── */
+.panel {
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(99,179,237,0.08);
+    border-radius: 22px;
+    padding: 44px 44px 36px;
+    margin-bottom: 4px;
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    position: relative;
     overflow: hidden;
+    transition: border-color .3s ease, background .3s ease;
+    animation: fadeUp .7s cubic-bezier(.16,1,.3,1) both;
 }
-.conf-fill-t {
-    height: 100%;
-    border-radius: 999px;
-    background: linear-gradient(90deg, #7f5af0, #c4b5fd);
-    box-shadow: 0 0 8px rgba(127,90,240,0.6);
+.panel::after {
+    content:'';
+    position:absolute;
+    top:0; left:0; right:0;
+    height:1px;
+    background: linear-gradient(90deg, transparent, rgba(99,179,237,0.35), transparent);
 }
-.conf-fill-ok {
-    height: 100%;
-    border-radius: 999px;
-    background: linear-gradient(90deg, #2cb67d, #6ee7b7);
-    box-shadow: 0 0 8px rgba(44,182,125,0.6);
-}
-
-.disclaimer {
-    background: rgba(255,137,6,0.06);
-    border: 1px solid rgba(255,137,6,0.2);
-    border-radius: 12px;
-    padding: 0.9rem 1.1rem;
-    margin-top: 1.2rem;
-    font-size: 0.78rem;
-    color: #a8956a;
-    line-height: 1.5;
-    display: flex;
-    gap: 0.6rem;
-    align-items: flex-start;
+.panel:hover {
+    border-color: rgba(99,179,237,0.16);
+    background: rgba(255,255,255,0.035);
 }
 
-.footer {
+/* ── STREAMLIT WIDGETS ──────────────────────────────────────────────────── */
+[data-testid="stSelectbox"] > div > div {
+    background: rgba(10,15,35,0.7) !important;
+    border: 1px solid rgba(99,179,237,0.15) !important;
+    border-radius: 13px !important;
+    color: #e2e8f0 !important;
+    font-family: 'Sora', sans-serif !important;
+    font-weight: 500 !important;
+    font-size: 14px !important;
+    min-height: 48px !important;
+    backdrop-filter: blur(12px) !important;
+    transition: border-color .25s ease, box-shadow .25s ease !important;
+}
+[data-testid="stSelectbox"] > div > div:hover {
+    border-color: rgba(99,179,237,0.4) !important;
+    box-shadow: 0 0 24px rgba(99,179,237,0.12) !important;
+}
+[data-testid="stSelectbox"] > div > div:focus-within {
+    border-color: #4fd1c5 !important;
+    box-shadow: 0 0 32px rgba(79,209,197,0.2) !important;
+}
+ul[role="listbox"] {
+    background: rgba(8,12,30,0.97) !important;
+    border: 1px solid rgba(99,179,237,0.18) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.6) !important;
+    backdrop-filter: blur(20px) !important;
+}
+li[role="option"] {
+    color: #cbd5e0 !important;
+    font-size: 14px !important;
+    font-family: 'Sora', sans-serif !important;
+    padding: 11px 16px !important;
+    transition: background .15s !important;
+}
+li[role="option"]:hover {
+    background: rgba(99,179,237,0.12) !important;
+    color: #63b3ed !important;
+}
+[data-testid="stWidgetLabel"] > div > p {
+    color: #a0aec0 !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    letter-spacing: .4px !important;
+    margin-bottom: 8px !important;
+    font-family: 'Sora', sans-serif !important;
+}
+[data-testid="column"] { padding: 0 10px !important; }
+
+/* ── BUTTON ─────────────────────────────────────────────────────────────── */
+[data-testid="stButton"] > button {
+    width: 100% !important;
+    background: linear-gradient(135deg, #2b6cb0 0%, #2c7a7b 100%) !important;
+    color: white !important;
+    font-family: 'Space Mono', monospace !important;
+    font-size: 13px !important;
+    font-weight: 700 !important;
+    letter-spacing: 2px !important;
+    text-transform: uppercase !important;
+    padding: 19px 40px !important;
+    border: 1px solid rgba(99,179,237,0.3) !important;
+    border-radius: 15px !important;
+    height: auto !important;
+    margin-top: 28px !important;
+    transition: all .3s cubic-bezier(.16,1,.3,1) !important;
+    box-shadow: 0 16px 40px rgba(43,108,176,0.35) !important;
+}
+[data-testid="stButton"] > button:hover {
+    transform: translateY(-3px) !important;
+    box-shadow: 0 24px 56px rgba(43,108,176,0.5), 0 0 60px rgba(79,209,197,0.15) !important;
+    border-color: rgba(79,209,197,0.5) !important;
+}
+[data-testid="stButton"] > button:active {
+    transform: translateY(-1px) !important;
+}
+
+/* ── RESULT ─────────────────────────────────────────────────────────────── */
+.result-wrap { animation: fadeUp .7s cubic-bezier(.16,1,.3,1); margin-top:52px; }
+.result-box {
+    border-radius: 26px;
+    padding: 56px 44px;
     text-align: center;
-    margin-top: 3rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
 }
-.footer-text {
+.result-box::after {
+    content:'';
+    position:absolute;
+    top:0; left:0; right:0;
+    height:1px;
+    background: linear-gradient(90deg, transparent, var(--result-color), transparent);
+    opacity: .6;
+}
+.result-ok  { background: rgba(104,211,145,0.05); border:1px solid rgba(104,211,145,0.2); --result-color:#68d391; }
+.result-bad { background: rgba(252,129,129,0.05); border:1px solid rgba(252,129,129,0.2); --result-color:#fc8181; }
+.result-icon { font-size:64px; display:block; margin-bottom:16px; animation:float 3s ease-in-out infinite; }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+.result-status {
     font-family: 'Space Mono', monospace;
-    font-size: 0.68rem;
-    color: #2a3045;
-    letter-spacing: 0.1em;
+    font-size: 10px;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
 }
-.footer-dots { display: flex; justify-content: center; gap: 0.4rem; margin-top: 0.6rem; }
-.footer-dot  { width: 4px; height: 4px; border-radius: 50%; background: var(--border); }
-.footer-dot:nth-child(2) { background: #7f5af044; }
+.result-ok  .result-status { color:#4fd1c5; }
+.result-bad .result-status { color:#fc8181; }
+.result-h2 { font-size:2rem; font-weight:800; color:#f0f4ff; margin-bottom:16px; letter-spacing:-1px; }
+.result-conf {
+    display:inline-block;
+    font-family:'Space Mono',monospace;
+    font-size:11px;
+    font-weight:700;
+    letter-spacing:1px;
+    padding: 8px 18px;
+    border-radius: 20px;
+    margin-bottom:20px;
+}
+.result-ok  .result-conf { background:rgba(104,211,145,0.12); color:#68d391; border:1px solid rgba(104,211,145,0.25); }
+.result-bad .result-conf { background:rgba(252,129,129,0.12); color:#fc8181; border:1px solid rgba(252,129,129,0.25); }
+.result-desc { font-size:15px; line-height:1.75; color:#718096; max-width:460px; margin:0 auto 36px; font-weight:300; }
+.bar-wrap { max-width:320px; margin:0 auto; }
+.bar-labels { display:flex; justify-content:space-between; font-family:'Space Mono',monospace; font-size:10px; color:#4a5568; margin-bottom:8px; letter-spacing:.5px; }
+.bar-track { height:5px; background:rgba(255,255,255,0.05); border-radius:3px; overflow:hidden; }
+.bar-fill { height:100%; border-radius:3px; animation:grow 1s cubic-bezier(.16,1,.3,1); }
+.result-ok  .bar-fill { background:linear-gradient(90deg,#68d391,#4fd1c5); box-shadow:0 0 14px rgba(104,211,145,.4); }
+.result-bad .bar-fill { background:linear-gradient(90deg,#fc8181,#f6ad55); box-shadow:0 0 14px rgba(252,129,129,.4); }
+@keyframes grow { from{width:0!important} }
+
+/* ── DISCLAIMER ─────────────────────────────────────────────────────────── */
+.disclaimer {
+    background: rgba(246,224,94,0.04);
+    border: 1px solid rgba(246,224,94,0.12);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-top: 24px;
+    display:flex; gap:12px; align-items:flex-start;
+    font-size:13px; color:#b7a56a; line-height:1.7;
+    backdrop-filter: blur(10px);
+}
+
+/* ── FOOTER ─────────────────────────────────────────────────────────────── */
+.footer {
+    text-align:center;
+    margin-top:72px;
+    padding-top:32px;
+    border-top:1px solid rgba(99,179,237,0.07);
+    font-family:'Space Mono',monospace;
+    font-size:9px;
+    letter-spacing:2px;
+    text-transform:uppercase;
+    color:#2d3748;
+}
+
+/* ── SPINNER ────────────────────────────────────────────────────────────── */
+[data-testid="stSpinner"] > div { border-color:#63b3ed !important; }
+
+/* ── RESPONSIVE ─────────────────────────────────────────────────────────── */
+@media(max-width:720px){
+    .shell { padding:48px 18px 80px; }
+    .panel { padding:28px 18px; }
+    .result-box { padding:40px 20px; }
+    .hero-stats { gap:28px; }
+    .hero-h1 { letter-spacing:-1.5px; }
+}
 </style>
 """, unsafe_allow_html=True)
 
-# ─── LOAD MODEL ──────────────────────────────────────────────
-@st.cache_resource
-def load_model():
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    model    = joblib.load(os.path.join(BASE_DIR, 'mental_health_model.pkl'))
-    scaler   = joblib.load(os.path.join(BASE_DIR, 'scaler.pkl'))
-    return model, scaler
-
-try:
-    model, scaler = load_model()
-    model_loaded  = True
-except Exception as e:
-    model_loaded  = False
-    error_msg     = str(e)
-
-# ─── HERO ────────────────────────────────────────────────────
+# ── CANVAS NEURAL ANIMATION ──────────────────────────────────────────────────
 st.markdown("""
-<div class="hero">
-    <div class="hero-badge">✦ AI POWERED &nbsp;·&nbsp; VOTING CLASSIFIER</div>
-    <span class="hero-brain">🧠</span>
-    <h1>Mental Health<br>Crisis Predictor</h1>
-    <p class="hero-sub">Answer a few questions — our model analyzes your risk profile instantly</p>
-    <div class="stats-row">
-        <div class="stat-item">
-            <div class="stat-num">292K</div>
-            <div class="stat-label">Records Trained</div>
-        </div>
-        <div class="stat-item">
-            <div class="stat-num">6</div>
-            <div class="stat-label">ML Models</div>
-        </div>
-        
-    </div>
-</div>
-<div class="glow-divider"></div>
+<canvas id="mv-canvas" style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;"></canvas>
+<script>
+(function(){
+    var canvas = document.getElementById('mv-canvas');
+    if(!canvas) return;
+    var ctx = canvas.getContext('2d');
+
+    function resize(){
+        canvas.width  = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    var N   = 72;
+    var MAXD = 190;
+    var time = 0;
+
+    function Neuron(){
+        this.x  = Math.random() * canvas.width;
+        this.y  = Math.random() * canvas.height;
+        this.vx = (Math.random()-.5) * .45;
+        this.vy = (Math.random()-.5) * .45;
+        this.r  = 1.4 + Math.random() * 2.2;
+        this.br = this.r;
+        this.phase = Math.random() * Math.PI * 2;
+        this.speed = .012 + Math.random() * .016;
+        this.h  = 195 + Math.random() * 35;
+        this.a  = .35 + Math.random() * .5;
+    }
+    Neuron.prototype.tick = function(){
+        this.x += this.vx;
+        this.y += this.vy;
+        this.phase += this.speed;
+        this.r = this.br + Math.sin(this.phase) * .9;
+        if(this.x < 0 || this.x > canvas.width)  this.vx *= -1;
+        if(this.y < 0 || this.y > canvas.height)  this.vy *= -1;
+    };
+    Neuron.prototype.draw = function(){
+        var glow = .6 + Math.sin(this.phase) * .4;
+        var g = ctx.createRadialGradient(this.x,this.y,0,this.x,this.y,this.r*6);
+        g.addColorStop(0, 'hsla('+this.h+',85%,68%,'+(this.a*glow*.7)+')');
+        g.addColorStop(1, 'hsla('+this.h+',85%,68%,0)');
+        ctx.beginPath();
+        ctx.arc(this.x,this.y,this.r*6,0,Math.PI*2);
+        ctx.fillStyle = g;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(this.x,this.y,this.r,0,Math.PI*2);
+        ctx.fillStyle = 'hsla('+this.h+',90%,78%,'+this.a+')';
+        ctx.fill();
+    };
+
+    var neurons = [];
+    for(var i=0;i<N;i++) neurons.push(new Neuron());
+
+    function Signal(a,b){
+        this.a = a; this.b = b;
+        this.t = 0;
+        this.spd = .018 + Math.random()*.018;
+        this.h = 185 + Math.random()*25;
+    }
+    Signal.prototype.tick = function(){
+        this.t += this.spd;
+        return this.t >= 1;
+    };
+    Signal.prototype.draw = function(){
+        var x = this.a.x + (this.b.x-this.a.x)*this.t;
+        var y = this.a.y + (this.b.y-this.a.y)*this.t;
+        var g = ctx.createRadialGradient(x,y,0,x,y,8);
+        g.addColorStop(0,'hsla('+this.h+',100%,82%,.95)');
+        g.addColorStop(.4,'hsla('+this.h+',100%,72%,.4)');
+        g.addColorStop(1,'hsla('+this.h+',100%,72%,0)');
+        ctx.beginPath();
+        ctx.arc(x,y,8,0,Math.PI*2);
+        ctx.fillStyle=g;
+        ctx.fill();
+    };
+
+    var signals = [];
+    var sigTimer = 0;
+
+    function aurora(cx,cy,rx,ry,h,a,t){
+        var x = cx + Math.sin(t*.7)  * rx * .35;
+        var y = cy + Math.cos(t*.55) * ry * .3;
+        var g = ctx.createRadialGradient(x,y,0,x,y,Math.max(rx,ry));
+        g.addColorStop(0,'hsla('+h+',80%,55%,'+a+')');
+        g.addColorStop(.5,'hsla('+(h+15)+',75%,50%,'+(a*.4)+')');
+        g.addColorStop(1,'hsla('+h+',80%,55%,0)');
+        ctx.beginPath();
+        ctx.ellipse(x,y,rx,ry,t*.08,0,Math.PI*2);
+        ctx.fillStyle=g;
+        ctx.fill();
+    }
+
+    function eegWave(yBase, amp1, amp2, amp3, freq1, freq2, freq3, phase, alpha){
+        ctx.beginPath();
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle='hsla(200,80%,65%,'+alpha+')';
+        var first=true;
+        for(var x=0; x<=canvas.width; x+=2){
+            var y = yBase
+                + Math.sin(x*freq1 + phase*1.6) * amp1
+                + Math.sin(x*freq2 - phase*1.0) * amp2
+                + Math.sin(x*freq3 + phase*2.4) * amp3
+                + Math.exp(-Math.pow((x%120-60),2)/80) * amp1 * 1.2 * Math.sin(x*.3+phase);
+            if(first){ ctx.moveTo(x,y); first=false; }
+            else ctx.lineTo(x,y);
+        }
+        ctx.stroke();
+    }
+
+    function ShootingStar(){ this.reset(); }
+    ShootingStar.prototype.reset = function(){
+        this.x  = Math.random() * canvas.width;
+        this.y  = Math.random() * canvas.height * .5;
+        this.len= 60 + Math.random()*80;
+        this.spd= 4 + Math.random()*5;
+        this.a  = .6 + Math.random()*.3;
+        this.life = 0;
+        this.maxLife = 40 + Math.random()*30;
+        this.ang = Math.PI*.18 + Math.random()*.12;
+    };
+    ShootingStar.prototype.tick = function(){
+        this.x += Math.cos(this.ang)*this.spd;
+        this.y += Math.sin(this.ang)*this.spd;
+        this.life++;
+        if(this.life>this.maxLife || this.x>canvas.width+200 || this.y>canvas.height)
+            this.reset();
+    };
+    ShootingStar.prototype.draw = function(){
+        var p = this.life/this.maxLife;
+        var a = this.a * Math.sin(p*Math.PI);
+        var g = ctx.createLinearGradient(
+            this.x,this.y,
+            this.x-Math.cos(this.ang)*this.len,
+            this.y-Math.sin(this.ang)*this.len
+        );
+        g.addColorStop(0,'rgba(180,220,255,'+a+')');
+        g.addColorStop(1,'rgba(180,220,255,0)');
+        ctx.beginPath();
+        ctx.moveTo(this.x,this.y);
+        ctx.lineTo(this.x-Math.cos(this.ang)*this.len, this.y-Math.sin(this.ang)*this.len);
+        ctx.strokeStyle=g;
+        ctx.lineWidth=1.5;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(this.x,this.y,1.8,0,Math.PI*2);
+        ctx.fillStyle='rgba(200,230,255,'+a+')';
+        ctx.fill();
+    };
+
+    var stars=[];
+    for(var s=0;s<4;s++) stars.push(new ShootingStar());
+    stars.forEach(function(s,i){ s.life = Math.floor(s.maxLife*(i/4)); });
+
+    function vignette(){
+        var g = ctx.createRadialGradient(
+            canvas.width*.5, canvas.height*.5, canvas.height*.15,
+            canvas.width*.5, canvas.height*.5, canvas.width*.75
+        );
+        g.addColorStop(0,'rgba(3,5,15,0)');
+        g.addColorStop(1,'rgba(3,5,15,.72)');
+        ctx.fillStyle=g;
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+    }
+
+    function loop(){
+        time += .007;
+        sigTimer++;
+
+        var bg=ctx.createLinearGradient(0,0,canvas.width,canvas.height);
+        bg.addColorStop(0,'#03050f');
+        bg.addColorStop(.5,'#070c1e');
+        bg.addColorStop(1,'#04060f');
+        ctx.fillStyle=bg;
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+
+        ctx.globalCompositeOperation='screen';
+        aurora(canvas.width*.18, canvas.height*.25, 320, 260, 215, .045, time);
+        aurora(canvas.width*.82, canvas.height*.6,  280, 220, 195, .038, -time*.9);
+        aurora(canvas.width*.5,  canvas.height*.75, 260, 200, 230, .030, time*1.1);
+        aurora(canvas.width*.3,  canvas.height*.8,  200, 170, 170, .025, -time*.7);
+        ctx.globalCompositeOperation='source-over';
+
+        for(var i=0;i<neurons.length;i++){
+            for(var j=i+1;j<neurons.length;j++){
+                var dx=neurons[i].x-neurons[j].x;
+                var dy=neurons[i].y-neurons[j].y;
+                var d=Math.sqrt(dx*dx+dy*dy);
+                if(d<MAXD){
+                    var ratio=1-d/MAXD;
+                    var h=200+ratio*30;
+                    ctx.beginPath();
+                    ctx.moveTo(neurons[i].x,neurons[i].y);
+                    ctx.lineTo(neurons[j].x,neurons[j].y);
+                    ctx.strokeStyle='hsla('+h+',75%,65%,'+(ratio*.22)+')';
+                    ctx.lineWidth=ratio*1.6;
+                    ctx.stroke();
+                }
+            }
+        }
+
+        if(sigTimer>45 && signals.length<12){
+            sigTimer=0;
+            var a=neurons[Math.floor(Math.random()*neurons.length)];
+            var b=neurons[Math.floor(Math.random()*neurons.length)];
+            if(a!==b){
+                var ddx=a.x-b.x, ddy=a.y-b.y;
+                if(Math.sqrt(ddx*ddx+ddy*ddy)<MAXD*1.4) signals.push(new Signal(a,b));
+            }
+        }
+
+        for(var si=signals.length-1;si>=0;si--){
+            signals[si].draw();
+            if(signals[si].tick()) signals.splice(si,1);
+        }
+
+        neurons.forEach(function(n){ n.tick(); n.draw(); });
+
+        eegWave(canvas.height*.82, 14,8,5,  .018,.009,.04, time, .10);
+        eegWave(canvas.height*.85, 18,10,6, .016,.011,.038,time, .07);
+        eegWave(canvas.height*.88, 11,7,4,  .020,.008,.042,time, .05);
+
+        stars.forEach(function(s){ s.draw(); s.tick(); });
+
+        vignette();
+
+        requestAnimationFrame(loop);
+    }
+    loop();
+})();
+</script>
+
+<div class="shell">
 """, unsafe_allow_html=True)
 
-if not model_loaded:
-    st.error(f"⚠️ Model load nahi hua: {error_msg}")
-    st.stop()
-
-# ─── FORM ────────────────────────────────────────────────────
-st.markdown('<div class="sec-label"><span>01</span> Personal Info</div>', unsafe_allow_html=True)
-
-col1, col2 = st.columns(2)
-with col1:
-    gender     = st.selectbox("Gender", ["Female", "Male"])
-with col2:
-    occupation = st.selectbox("Occupation", ["Corporate", "Self-Employed", "Student", "Housewife", "Others"])
-
-col3, col4 = st.columns(2)
-with col3:
-    self_employed  = st.radio("Self Employed?", ["No", "Yes"], horizontal=True)
-with col4:
-    family_history = st.radio("Family History of Mental Illness?", ["No", "Yes"], horizontal=True)
-
-st.markdown('<div class="sec-label"><span>02</span> Stress & Behavior</div>', unsafe_allow_html=True)
-
-col5, col6 = st.columns(2)
-with col5:
-    growing_stress = st.selectbox("Growing Stress?",    ["No", "Yes", "Maybe"])
-with col6:
-    changes_habits = st.selectbox("Changes in Habits?", ["No", "Yes", "Maybe"])
-
-col7, col8 = st.columns(2)
-with col7:
-    coping_struggles = st.radio("Coping Struggles?", ["No", "Yes"], horizontal=True)
-with col8:
-    mood_swings = st.select_slider("Mood Swings", options=["Low", "Medium", "High"])
-
-col9, col10 = st.columns(2)
-with col9:
-    work_interest   = st.selectbox("Interest in Work?", ["No", "Yes", "Maybe"])
-with col10:
-    social_weakness = st.selectbox("Social Weakness?",  ["No", "Yes", "Maybe"])
-
-st.markdown('<div class="sec-label"><span>03</span> Lifestyle & Awareness</div>', unsafe_allow_html=True)
-
-col11, col12 = st.columns(2)
-with col11:
-    days_indoors = st.select_slider(
-        "Days Spent Indoors",
-        options=["Go out Every day", "1-14 days", "15-30 days", "31-60 days", "More than 2 months"]
-    )
-with col12:
-    care_options = st.selectbox("Aware of Care Options?", ["No", "Not sure", "Yes"])
-
-mental_health_history   = st.selectbox("Mental Health History?",          ["No", "Yes", "Maybe"])
-mental_health_interview = st.selectbox("Comfortable Discussing at Work?", ["No", "Yes", "Maybe"])
-
-# ─── MAPPINGS ────────────────────────────────────────────────
-binary_map = {"Yes": 1, "No": 0}
-tri_map    = {"Yes": 1, "No": 0, "Maybe": 0.5}
-mood_map   = {"Low": 0, "Medium": 1, "High": 2}
-days_map   = {"Go out Every day": 0, "1-14 days": 1, "15-30 days": 2, "31-60 days": 3, "More than 2 months": 4}
-care_map   = {"No": 0, "Not sure": 0.5, "Yes": 1}
-occ_map    = {"Corporate": 0, "Housewife": 1, "Others": 2, "Self-Employed": 3, "Student": 4}
-gender_map = {"Female": 0, "Male": 1}
-
-# ─── PREDICT ─────────────────────────────────────────────────
-predict_btn = st.button("⚡ Analyze My Mental Health Risk")
-
-if predict_btn:
-    g    = gender_map[gender]
-    occ  = occ_map[occupation]
-    se   = binary_map[self_employed]
-    fh   = binary_map[family_history]
-    gs   = tri_map[growing_stress]
-    ch   = tri_map[changes_habits]
-    mhi  = tri_map[mental_health_history]
-    ms   = mood_map[mood_swings]
-    cs   = binary_map[coping_struggles]
-    wi   = tri_map[work_interest]
-    sw   = tri_map[social_weakness]
-    mhi2 = tri_map[mental_health_interview]
-    co   = care_map[care_options]
-    di   = days_map[days_indoors]
-
-    stress_score       = gs + ms + cs
-    behavioral_score   = ch + wi + sw
-    awareness_score    = mhi + mhi2 + co
-    stress_x_family    = stress_score    * fh
-    care_x_family      = co              * fh
-    awareness_x_family = awareness_score * fh
-    gender_x_stress    = g               * stress_score
-    high_risk_flag     = int((stress_score >= 3) and (behavioral_score >= 4) and (fh == 1))
-
-    features = np.array([[
-        g, occ, se, fh, di,
-        gs, ch, mhi, ms, cs, wi, sw, mhi2, co,
-        stress_score, behavioral_score, awareness_score,
-        stress_x_family, care_x_family, awareness_x_family,
-        gender_x_stress, high_risk_flag
-    ]])
-
-    features_scaled = scaler.transform(features)
-    prediction      = model.predict(features_scaled)[0]
-    proba           = model.predict_proba(features_scaled)[0]
-    confidence      = round(proba[prediction] * 100, 1)
-
-    st.markdown('<div class="glow-divider"></div>', unsafe_allow_html=True)
-
-    if prediction == 1:
-        st.markdown(f"""
-        <div class="result-box result-treatment">
-            <span class="result-icon">🔴</span>
-            <div class="result-title">Treatment Recommended</div>
-            <p class="result-desc">Our model detected indicators suggesting professional mental health support could be beneficial for you.</p>
-            <div class="conf-wrap">
-                <div class="conf-top">
-                    <span class="conf-text">MODEL CONFIDENCE</span>
-                    <span class="conf-pct">{confidence}%</span>
-                </div>
-                <div class="conf-track">
-                    <div class="conf-fill-t" style="width:{confidence}%"></div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown(f"""
-        <div class="result-box result-ok">
-            <span class="result-icon">🟢</span>
-            <div class="result-title">No Treatment Needed</div>
-            <p class="result-desc">Based on your responses, no immediate mental health intervention appears necessary at this time.</p>
-            <div class="conf-wrap">
-                <div class="conf-top">
-                    <span class="conf-text">MODEL CONFIDENCE</span>
-                    <span class="conf-pct">{confidence}%</span>
-                </div>
-                <div class="conf-track">
-                    <div class="conf-fill-ok" style="width:{confidence}%"></div>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-
-    st.markdown("""
-    <div class="disclaimer">
-        <span>⚠️</span>
-        <span><strong>Disclaimer:</strong> This tool is for educational purposes only and does not
-        replace professional medical advice. Please consult a qualified mental health professional
-        for proper diagnosis and treatment.</span>
+# ── NAVIGATION ───────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="nav">
+    <div class="nav-logo">🧠 MindVault</div>
+    <div class="nav-pill">
+        <div class="nav-pill-dot"></div>
+        Neural AI · Live
     </div>
-    """, unsafe_allow_html=True)
+</div>
+""", unsafe_allow_html=True)
 
-# ─── FOOTER ──────────────────────────────────────────────────
+# ── HERO ─────────────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="hero">
+    <div class="hero-tag">
+        <div class="hero-tag-glow"></div>
+        Mental Health Assessment
+    </div>
+    <div class="hero-h1">
+        Your Mind<br><span>Matters Most</span>
+    </div>
+    <p class="hero-sub">
+        14 thoughtful questions. One AI-powered insight.<br>
+        Understand your mental wellness in under 60 seconds.
+    </p>
+    <div class="hero-stats">
+        <div class="stat">
+            <div class="stat-val">72%</div>
+            <div class="stat-lbl">Accuracy</div>
+        </div>
+        <div class="stat">
+            <div class="stat-val">&lt;1s</div>
+            <div class="stat-lbl">Result</div>
+        </div>
+        <div class="stat">
+            <div class="stat-val">100%</div>
+            <div class="stat-lbl">Private</div>
+        </div>
+    </div>
+</div>
+<div class="divider"></div>
+""", unsafe_allow_html=True)
+
+# ── FORM MAPS ─────────────────────────────────────────────────────────────────
+YESNO       = {"Yes": 1, "No": 0}
+YESNO_MAYBE = {"Yes": 1, "Maybe": 0.5, "No": 0}
+GENDER_MAP  = {"Female": 0, "Male": 1}
+OCC_MAP     = {"Corporate": 0, "Self-Employed": 1, "Student": 2, "Other": 3}
+DAYS_MAP    = {"Go out every day": 0, "1–14 days": 1, "15–30 days": 2,
+               "31–60 days": 3, "More than 2 months": 4}
+MOOD_MAP    = {"Low": 0, "Medium": 1, "High": 2}
+CARE_MAP    = {"No": 0, "Not sure": 0.5, "Yes": 1}
+
+# ── SECTION 01 ────────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="sec-head">
+    <div class="sec-num">01</div>
+    <div class="sec-title">Personal Background</div>
+    <div class="sec-line"></div>
+</div>
+<div class="panel">
+""", unsafe_allow_html=True)
+c1, c2 = st.columns(2, gap="large")
+with c1:
+    gender     = st.selectbox("Gender",        list(GENDER_MAP.keys()), key="g")
+    occupation = st.selectbox("Occupation",    list(OCC_MAP.keys()),    key="o")
+with c2:
+    self_employed  = st.selectbox("Self-employed?",                    list(YESNO.keys()), key="se")
+    family_history = st.selectbox("Family history of mental illness?", list(YESNO.keys()), key="fh")
+st.markdown('</div>', unsafe_allow_html=True)
+
+# ── SECTION 02 ────────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="sec-head">
+    <div class="sec-num">02</div>
+    <div class="sec-title">Stress & Emotional State</div>
+    <div class="sec-line"></div>
+</div>
+<div class="panel">
+""", unsafe_allow_html=True)
+c3, c4 = st.columns(2, gap="large")
+with c3:
+    growing_stress   = st.selectbox("Growing stress lately?",        list(YESNO_MAYBE.keys()), key="gs")
+    mood_swings      = st.selectbox("Mood swing intensity?",         list(MOOD_MAP.keys()),    key="ms")
+with c4:
+    coping_struggles = st.selectbox("Struggling to cope daily?",     list(YESNO.keys()),       key="cs")
+    changes_habits   = st.selectbox("Noticeable changes in habits?", list(YESNO_MAYBE.keys()), key="ch")
+st.markdown('</div>', unsafe_allow_html=True)
+
+# ── SECTION 03 ────────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="sec-head">
+    <div class="sec-num">03</div>
+    <div class="sec-title">Behaviour & Social Life</div>
+    <div class="sec-line"></div>
+</div>
+<div class="panel">
+""", unsafe_allow_html=True)
+c5, c6 = st.columns(2, gap="large")
+with c5:
+    work_interest   = st.selectbox("Lost interest in work/hobbies?", list(YESNO_MAYBE.keys()), key="wi")
+    social_weakness = st.selectbox("Feeling socially withdrawn?",    list(YESNO_MAYBE.keys()), key="sw")
+with c6:
+    days_indoors    = st.selectbox("Days spent indoors (past month)?", list(DAYS_MAP.keys()),  key="di")
+st.markdown('</div>', unsafe_allow_html=True)
+
+# ── SECTION 04 ────────────────────────────────────────────────────────────────
+st.markdown("""
+<div class="sec-head">
+    <div class="sec-num">04</div>
+    <div class="sec-title">Awareness & Support Access</div>
+    <div class="sec-line"></div>
+</div>
+<div class="panel">
+""", unsafe_allow_html=True)
+c7, c8 = st.columns(2, gap="large")
+with c7:
+    mh_history   = st.selectbox("Prior mental health episodes?",      list(YESNO_MAYBE.keys()), key="mhh")
+    mh_interview = st.selectbox("Comfortable discussing MH at work?", list(YESNO_MAYBE.keys()), key="mhi")
+with c8:
+    care_options = st.selectbox("Access to mental health care?",      list(CARE_MAP.keys()),    key="co")
+st.markdown('</div>', unsafe_allow_html=True)
+
+st.markdown('<div class="divider"></div>', unsafe_allow_html=True)
+
+# ── RUN BUTTON ────────────────────────────────────────────────────────────────
+predict_clicked = st.button("✦  Reveal My Assessment", key="predict_btn")
+
+# ── PREDICTION ────────────────────────────────────────────────────────────────
+if predict_clicked:
+    with st.spinner("Analysing your responses…"):
+        try:
+            model = load_model()
+
+            r = {
+                "Gender":                  GENDER_MAP[gender],
+                "Occupation":              OCC_MAP[occupation],
+                "self_employed":           YESNO[self_employed],
+                "family_history":          YESNO[family_history],
+                "Days_Indoors":            DAYS_MAP[days_indoors],
+                "Growing_Stress":          YESNO_MAYBE[growing_stress],
+                "Changes_Habits":          YESNO_MAYBE[changes_habits],
+                "Mental_Health_History":   YESNO_MAYBE[mh_history],
+                "Mood_Swings":             MOOD_MAP[mood_swings],
+                "Coping_Struggles":        YESNO[coping_struggles],
+                "Work_Interest":           YESNO_MAYBE[work_interest],
+                "Social_Weakness":         YESNO_MAYBE[social_weakness],
+                "mental_health_interview": YESNO_MAYBE[mh_interview],
+                "care_options":            CARE_MAP[care_options],
+            }
+
+            # ── Feature engineering (same as training notebook) ──────────
+            stress_score     = r["Growing_Stress"] + r["Mood_Swings"] + r["Coping_Struggles"]
+            behavioral_score = r["Changes_Habits"] + r["Work_Interest"] + r["Social_Weakness"] + r["Days_Indoors"]
+            awareness_score  = r["Mental_Health_History"] + r["mental_health_interview"] + r["care_options"]
+
+            stress_x_family    = stress_score    * r["family_history"]
+            care_x_family      = r["care_options"] * r["family_history"]
+            awareness_x_family = awareness_score  * r["family_history"]
+            gender_x_stress    = r["Gender"]      * stress_score
+
+            high_risk_flag = int(
+                stress_score     >= 3 and
+                behavioral_score >= 4 and
+                r["family_history"] == 1
+            )
+
+            features = np.array([[
+                r["Gender"], r["Occupation"], r["self_employed"], r["family_history"],
+                r["Days_Indoors"], r["Growing_Stress"], r["Changes_Habits"],
+                r["Mental_Health_History"], r["Mood_Swings"], r["Coping_Struggles"],
+                r["Work_Interest"], r["Social_Weakness"], r["mental_health_interview"],
+                r["care_options"],
+                stress_score, behavioral_score, awareness_score,
+                stress_x_family, care_x_family, awareness_x_family,
+                gender_x_stress, high_risk_flag,
+            ]])
+
+            prediction = model.predict(features)[0]
+            proba      = model.predict_proba(features)[0]
+            confidence = float(max(proba))
+            conf_pct   = round(confidence * 100, 1)
+            conf_str   = f"{conf_pct}%"
+            bar_w      = max(conf_pct, 5)
+            is_bad     = int(prediction) == 1
+
+            explanation = (
+                "Based on your answers, seeking professional mental health support is recommended."
+                if is_bad
+                else "Your responses suggest a lower risk profile right now. Stay mindful!"
+            )
+
+            if is_bad:
+                st.markdown(f"""
+                <div class="result-wrap">
+                  <div class="result-box result-bad">
+                    <span class="result-icon">🔴</span>
+                    <div class="result-status">Assessment Complete</div>
+                    <div class="result-h2">Support Recommended</div>
+                    <div class="result-conf">Confidence · {conf_str}</div>
+                    <p class="result-desc">{explanation}</p>
+                    <div class="bar-wrap">
+                      <div class="bar-labels"><span>Confidence</span><span>{conf_str}</span></div>
+                      <div class="bar-track"><div class="bar-fill" style="width:{bar_w}%"></div></div>
+                    </div>
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div class="result-wrap">
+                  <div class="result-box result-ok">
+                    <span class="result-icon">🟢</span>
+                    <div class="result-status">Assessment Complete</div>
+                    <div class="result-h2">Positive Mental State</div>
+                    <div class="result-conf">Confidence · {conf_str}</div>
+                    <p class="result-desc">{explanation}</p>
+                    <div class="bar-wrap">
+                      <div class="bar-labels"><span>Confidence</span><span>{conf_str}</span></div>
+                      <div class="bar-track"><div class="bar-fill" style="width:{bar_w}%"></div></div>
+                    </div>
+                  </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown("""
+            <div class="disclaimer">
+                <span style="flex-shrink:0;margin-top:2px;">⚠️</span>
+                <span><strong>Medical Disclaimer:</strong> MindVault is an educational ML demonstration —
+                <strong>not a clinical diagnosis</strong>. If you are in distress, please consult a licensed
+                mental health professional immediately.</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+        except Exception as e:
+            st.error(f"❌ Prediction error: {e}")
+
+# ── FOOTER ────────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="footer">
-    <div class="footer-text">MENTAL HEALTH CRISIS PREDICTOR &nbsp;·&nbsp; VOTING CLASSIFIER &nbsp;·&nbsp; 292K RECORDS</div>
-    <div class="footer-dots">
-        <div class="footer-dot"></div>
-        <div class="footer-dot"></div>
-        <div class="footer-dot"></div>
-    </div>
+    MindVault &nbsp;·&nbsp; Powered by Streamlit &nbsp;·&nbsp; Not for Clinical Use
+</div>
 </div>
 """, unsafe_allow_html=True)
